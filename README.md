@@ -1,8 +1,8 @@
 # 🎮 Proyecto Final: Chilli Willi - Videojuego con Three.js
 
-**Materia:** Programación  
+**Materia:** Programación 4  
 **Tecnología:** Three.js (JavaScript + WebGL)  
-**Equipo:** Creatividad Digital + Ingeniería de Software  
+**Equipo:** Creatividad Digital + IA  
 **Semestre:** 2026
 
 ---
