@@ -1,60 +1,307 @@
-import './style.css'
-import heroImg from './assets/hero.png'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import { setupCounter } from './counter.js'
 
-document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+/**
+ * CHILLI WILLI - Primera escena 3D
+ *
+ * Tecnologías:
+ * - JavaScript moderno (ES6)
+ * - Three.js
+ * - Vite
+ *
+ * Objetivo:
+ * Mostrar el modelo 3D de Chilli Willy
+ * y permitir mover la cámara con el mouse.
+ *
+ * Modelo:
+ * public/assets/modelos/modelos_chilli_willy (1).glb
+ */
 
-<div class="ticks"></div>
+// ============================================
+// 1. IMPORTACIONES
+// ============================================
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+// Importamos las herramientas de Three.js.
+import * as THREE from 'three';
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+// Importamos los controles de cámara.
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-setupCounter(document.querySelector('#counter'))
+// Importamos el cargador de modelos GLB.
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+
+// ============================================
+// 2. CONFIGURACIÓN DE LA PÁGINA
+// ============================================
+
+// Eliminamos los márgenes predeterminados.
+document.body.style.margin = '0';
+
+// Evitamos barras de desplazamiento.
+document.body.style.overflow = 'hidden';
+
+
+// ============================================
+// 3. CREACIÓN DE LA ESCENA
+// ============================================
+
+// Creamos el espacio tridimensional.
+const scene = new THREE.Scene();
+
+// Establecemos el fondo oscuro original.
+scene.background = new THREE.Color('#101827');
+
+
+// ============================================
+// 4. CREACIÓN DE LA CÁMARA
+// ============================================
+
+// Creamos una cámara con perspectiva.
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+// Conservamos la posición original.
+camera.position.z = 5;
+
+
+// ============================================
+// 5. CREACIÓN DEL RENDERER
+// ============================================
+
+// Creamos el motor de renderizado.
+const renderer = new THREE.WebGLRenderer({
+  antialias: true
+});
+
+// Ajustamos el tamaño del canvas.
+renderer.setSize(
+  window.innerWidth,
+  window.innerHeight
+);
+
+// Limitamos la densidad de píxeles a 2.
+renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio, 2)
+);
+
+// Añadimos el canvas a la página.
+document.body.appendChild(renderer.domElement);
+
+
+// ============================================
+// 6. ILUMINACIÓN AMBIENTAL
+// ============================================
+
+// Luz ambiental original.
+const ambientLight = new THREE.AmbientLight(
+  0xffffff,
+  0.5
+);
+
+// Añadimos la luz ambiental.
+scene.add(ambientLight);
+
+
+// ============================================
+// 7. ILUMINACIÓN DIRECCIONAL
+// ============================================
+
+// Luz direccional original.
+const directionalLight = new THREE.DirectionalLight(
+  0xffffff,
+  1
+);
+
+// Conservamos su posición.
+directionalLight.position.set(5, 5, 5);
+
+// Añadimos la luz a la escena.
+scene.add(directionalLight);
+
+
+// ============================================
+// 8. CONTROLES DE CÁMARA
+// ============================================
+
+// Permitimos controlar la cámara con el mouse.
+const controls = new OrbitControls(
+  camera,
+  renderer.domElement
+);
+
+// Activamos movimientos suaves.
+controls.enableDamping = true;
+
+// Conservamos el factor original.
+controls.dampingFactor = 0.05;
+
+// La cámara observa el centro de la escena.
+controls.target.set(0, 0, 0);
+
+// Aplicamos la configuración.
+controls.update();
+
+
+// ============================================
+// 9. CARGADOR DEL MODELO 3D
+// ============================================
+
+// Creamos una instancia de GLTFLoader.
+const loader = new GLTFLoader();
+
+// Ruta exacta del archivo dentro de public.
+const modelPath =
+  '/assets/modelos/modelos_chilli_willy (1).glb';
+
+
+// ============================================
+// 10. CARGA DEL MODELO CHILLI WILLY
+// ============================================
+
+loader.load(
+
+  modelPath,
+
+  // ==========================================
+  // CARGA EXITOSA
+  // ==========================================
+
+  (gltf) => {
+
+    // Obtenemos el modelo 3D.
+    const model = gltf.scene;
+
+    // Conservamos la escala original.
+    //
+    // Si el modelo es demasiado grande
+    // o demasiado pequeño, podemos usar:
+    //
+    // model.scale.set(x, y, z);
+    //
+    // Ejemplo:
+    // model.scale.set(0.5, 0.5, 0.5);
+    //
+    // No modificamos la escala todavía.
+
+    // Añadimos Chilli Willy a la escena.
+    scene.add(model);
+
+    // Confirmamos la carga en consola.
+    console.log("Modelo cargado correctamente");
+
+  },
+
+  // ==========================================
+  // PROGRESO DE CARGA
+  // ==========================================
+
+  (xhr) => {
+
+    // Mostramos el progreso cuando el navegador
+    // proporciona el tamaño total del archivo.
+    if (xhr.total > 0) {
+
+      const progress =
+        (xhr.loaded / xhr.total) * 100;
+
+      console.log(
+        `Cargando modelo: ${progress.toFixed(1)}%`
+      );
+
+    }
+
+  },
+
+  // ==========================================
+  // ERROR DE CARGA
+  // ==========================================
+
+  (error) => {
+
+    console.error(
+      "Error al cargar el modelo 3D:",
+      error
+    );
+
+    console.error(
+      "Verifica que el archivo exista en:",
+      modelPath
+    );
+
+  }
+
+);
+
+
+// ============================================
+// 11. ADAPTACIÓN AL TAMAÑO DE VENTANA
+// ============================================
+
+// Detectamos cambios en el tamaño del navegador.
+window.addEventListener('resize', () => {
+
+  // Actualizamos la proporción de la cámara.
+  camera.aspect =
+    window.innerWidth / window.innerHeight;
+
+  // Recalculamos la proyección.
+  camera.updateProjectionMatrix();
+
+  // Ajustamos el tamaño del renderer.
+  renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+  );
+
+  // Actualizamos la densidad de píxeles.
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 2)
+  );
+
+});
+
+
+// ============================================
+// 12. RELOJ DE ANIMACIÓN
+// ============================================
+
+// Conservamos el reloj para futuras animaciones.
+const clock = new THREE.Clock();
+
+
+// ============================================
+// 13. BUCLE DE ANIMACIÓN
+// ============================================
+
+// Esta función se ejecuta continuamente.
+function animate() {
+
+  // Solicitamos el siguiente frame.
+  requestAnimationFrame(animate);
+
+  // Medimos el tiempo transcurrido.
+  // Disponible para futuras animaciones.
+  const delta = clock.getDelta();
+
+  // El modelo conserva su orientación original.
+  // No aplicamos rotación automática.
+
+  // Actualizamos OrbitControls.
+  controls.update();
+
+  // Dibujamos la escena.
+  renderer.render(scene, camera);
+
+}
+
+
+// ============================================
+// 14. INICIO DEL PROGRAMA
+// ============================================
+
+// Iniciamos el bucle de renderizado.
+animate();
+
