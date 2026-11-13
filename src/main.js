@@ -153,8 +153,7 @@ controls.update();
 const loader = new GLTFLoader();
 
 // Ruta exacta del archivo dentro de public.
-const modelPath =
-  '/assets/modelos/modelos_chilli_willy (1).glb';
+const modelPath = '/assets/modelos/chilli_willi.glb';
 
 
 // ============================================
