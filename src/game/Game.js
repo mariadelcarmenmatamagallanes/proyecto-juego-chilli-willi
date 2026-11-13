@@ -2,11 +2,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PhysicsWorld } from '../physics/PhysicsWorld.js';
+import { CollisionSystem } from '../physics/CollisionSystem.js';
+import { InputHandler } from '../player/InputHandler.js';
+import { PlayerController } from '../player/PlayerController.js';
 
 export class Game {
   constructor({ physicsDebug = false } = {}) {
     this.disposed = false;
     this.previousTime = null;
+    this.physicsDebug = physicsDebug;
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
 
@@ -32,7 +36,9 @@ export class Game {
     this.controls.update();
 
     this.physics = new PhysicsWorld();
-    if (physicsDebug) this.enablePhysicsDebug();
+    this.collisions = new CollisionSystem(this.physics);
+    this.input = new InputHandler();
+    this.addControlHint();
     this.loadModel();
     this.onResize = () => this.resize();
     window.addEventListener('resize', this.onResize);
@@ -47,30 +53,64 @@ export class Game {
         return;
       }
       this.scene.add(gltf.scene);
+      try {
+        this.setupPlayer(gltf.scene);
+      } catch (error) {
+        console.error('No se pudo preparar al personaje:', error);
+      }
       console.info('Modelo cargado correctamente');
     }, undefined, (error) => {
       if (!this.disposed) console.error('Error al cargar el modelo 3D:', modelPath, error);
     });
   }
 
+  setupPlayer(root) {
+    const penguin = root.getObjectByName('Pinguino');
+    if (!penguin) throw new Error('El GLB no contiene el objeto Pinguino.');
+    const surfaces = this.collisions.addPlatformsFromScene(root);
+    const bounds = new THREE.Box3().setFromObject(penguin);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const radius = bounds.getSize(new THREE.Vector3()).y / 2;
+    this.playerPivot = new THREE.Group();
+    this.playerPivot.position.copy(center);
+    this.scene.add(this.playerPivot);
+    // Reparent only the character, preserving its world pose and original materials.
+    this.playerPivot.attach(penguin);
+    this.player = new PlayerController({
+      physics: this.physics, collisions: this.collisions, input: this.input,
+      visual: this.playerPivot, position: center, radius,
+    });
+    this.camera.position.copy(center).add(new THREE.Vector3(0, 1.5, 3));
+    this.controls.target.copy(center);
+    this.controls.update();
+    this.lastPlayerPosition = center.clone();
+    if (this.physicsDebug) this.enablePhysicsDebug();
+    console.info('[Jugador] Listo. Plataformas:', surfaces.platforms, 'Radio:', radius);
+  }
+
+  addControlHint() {
+    this.hint = document.createElement('div');
+    this.hint.textContent = 'Mover: WASD / flechas · Saltar: espacio · Volver al inicio: R · Camara: mouse';
+    Object.assign(this.hint.style, {
+      position: 'fixed', bottom: '12px', left: '12px', color: 'white',
+      background: '#101827cc', padding: '8px 12px', borderRadius: '6px',
+      font: '14px system-ui', pointerEvents: 'none', maxWidth: 'calc(100% - 48px)',
+    });
+    document.body.appendChild(this.hint);
+  }
+
   enablePhysicsDebug() {
-    this.debugBodies = this.physics.createTestBodies();
     this.debugMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.SphereGeometry(this.player.radius, 16, 12),
       new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }),
     );
-    this.debugMesh.position.copy(this.debugBodies.cube.position);
+    this.debugMesh.position.copy(this.player.body.position);
     this.scene.add(this.debugMesh);
-    const floor = new THREE.GridHelper(10, 10);
-    this.scene.add(floor);
-    console.info('[Fisica] Prueba activa: cubo desde y=3, suelo y=0, gravedad -9.81.');
-    let reported = false;
-    this.debugBodies.cube.addEventListener('collide', (event) => {
-      if (!reported && event.body === this.debugBodies.floor) {
-        reported = true;
-        console.info('[Fisica] Contacto cubo/suelo detectado.');
-      }
-    });
+    this.groundLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({ color: 0xffff00 }),
+    );
+    this.scene.add(this.groundLine);
   }
 
   update(time) {
@@ -78,9 +118,21 @@ export class Game {
     const delta = this.previousTime === null ? 0 : (time - this.previousTime) / 1000;
     this.previousTime = time;
     this.physics.step(delta);
-    if (this.debugMesh) {
-      this.debugMesh.position.copy(this.debugBodies.cube.interpolatedPosition);
-      this.debugMesh.quaternion.copy(this.debugBodies.cube.interpolatedQuaternion);
+    if (this.player) {
+      this.player.syncVisual();
+      const position = this.playerPivot.position;
+      const movement = position.clone().sub(this.lastPlayerPosition);
+      this.camera.position.add(movement);
+      this.controls.target.copy(position);
+      this.lastPlayerPosition.copy(position);
+      if (this.debugMesh) {
+        this.debugMesh.position.copy(this.player.body.position);
+        const points = this.groundLine.geometry.attributes.position;
+        points.setXYZ(0, position.x, position.y, position.z);
+        points.setXYZ(1, position.x, position.y - this.player.radius - 0.025, position.z);
+        points.needsUpdate = true;
+        this.groundLine.geometry.computeBoundingSphere();
+      }
     }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
@@ -113,6 +165,10 @@ export class Game {
     this.renderer.setAnimationLoop(null);
     window.removeEventListener('resize', this.onResize);
     this.controls.dispose();
+    this.input.dispose();
+    this.player?.dispose();
+    this.collisions.dispose();
+    this.hint.remove();
     this.physics.dispose();
     this.disposeObjects(this.scene);
     this.scene.clear();

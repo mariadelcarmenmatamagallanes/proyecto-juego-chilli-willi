@@ -9,9 +9,9 @@
 **Equipo:** Creatividad Digital + Ingeniería de Software (IA)  
 **Semestre:** 2026  
 **Estándar:** Basado en IEEE 830  
-**Estado:** Fase 1 aplicada; tres pruebas de física aprobadas en el proyecto real. Mecánicas completas pendientes.
+**Estado:** Fase 1 aplicada al proyecto real. Fase 2 implementada y validada en copia de trabajo, pendiente de copiar al proyecto real. Diez pruebas automatizadas aprobadas en la copia. Mecánicas completas pendientes.
 
-**Alcance de esta actualización:** registrar la Fase 1 aplicada: arranque modular, Game.js, PhysicsWorld.js y pruebas. Cannon-es ya estaba instalado. La implementación no cambió dependencias ni recursos visuales.
+**Alcance de esta actualización:** registrar la Fase 1 aplicada y la Fase 2 entregada: controlador físico, teclado, suelo, plataformas y sincronización del personaje. Cannon-es ya estaba instalado. No se cambiaron dependencias ni recursos visuales.
 
 **Procedencia:** SRS v0.3 de la conversación «Diagnóstico proyecto Chilli Willi», README original leído en el proyecto y verificación de la Fase 1. Los apartados siguientes conservan los requisitos objetivo; el registro de avance distingue lo implementado.
 
@@ -213,7 +213,7 @@ Los archivos visuales existentes deberán conservarse sin alteraciones innecesar
 
 ### RT-04. Motor de física y movimiento
 
-Se utilizará **Cannon-es** como motor de física para gestionar gravedad, movimiento dinámico, colisiones e inercia. Su base ya está integrada en Fase 1; el personaje y las plataformas reales siguen pendientes.
+Se utilizará **Cannon-es** como motor de física para gestionar gravedad, movimiento dinámico, colisiones e inercia. La Fase 1 integra su base; la entrega de Fase 2 añade cuerpo del personaje, controles y soporte físico de las plataformas reales, verificados en copia de trabajo.
 
 **Integración**
 
@@ -315,6 +315,7 @@ src/
 | `main.js` | Punto de entrada de la aplicación. | RT-08 |
 | `game/Game.js` | Inicialización de escena, cámara, renderizador y bucle principal. | RT-01, RT-08 |
 | `player/PlayerController.js` | Movimiento, saltos y entradas del jugador. | RF-01, RT-04 |
+| `player/InputHandler.js` | Teclado, normalización de direcciones, solicitud de salto y limpieza al perder el foco. Entregado en Fase 2. | RF-01 |
 | `physics/PhysicsWorld.js` | Mundo físico, materiales, paso fijo y cuerpos de prueba. Implementado en Fase 1. | RT-04 |
 | `physics/CollisionSystem.js` | Gestión de contactos, raycasting, suelo y detección de caídas. | RF-02, RF-03 |
 | `objects/Collectibles.js` | Interacción con cobijas y fogatas. | RF-04, RF-05 |
@@ -332,7 +333,7 @@ La transición entre estados deberá ser controlada por `GameState.js`.
 
 La reaparición del personaje se coordinará entre el controlador, el sistema de colisiones y el estado de la partida, conforme a RF-09.
 
-Esta estructura constituye la arquitectura objetivo. La Fase 1 ya implementa main.js, game/Game.js y physics/PhysicsWorld.js; el resto requiere implementación o validación funcional.
+Esta estructura constituye la arquitectura objetivo. La Fase 1 implementa main.js, game/Game.js y physics/PhysicsWorld.js. La entrega de Fase 2 añade player/PlayerController.js, player/InputHandler.js y física de plataformas/detección de suelo en physics/CollisionSystem.js, con validación en copia de trabajo. Caídas, coleccionables, estados y HUD siguen pendientes.
 
 ---
 
@@ -461,7 +462,7 @@ La validación final deberá realizarse mediante revisión del código y ejecuci
 
 Esta actualización registra el avance de Fase 1 sin cambiar las reglas ni la numeración de requisitos de la v0.3. Los casos CP-01 a CP-14 son criterios de aceptación del juego completo y siguen pendientes de validación; las pruebas de cubo/suelo no acreditan por sí mismas el comportamiento del personaje.
 
-## 12. Avance verificado — Fase 1
+## 12. Registro histórico de cierre — Fase 1
 
 | Tarea | Resultado | Validación |
 |---|---|---|
@@ -475,7 +476,58 @@ La compilación y la revisión visual se realizaron en la copia de trabajo; no s
 
 Se verificaron 16 recursos visuales y los archivos de dependencias sin cambios en la implementación entregada. Cannon-es 0.20.0 ya estaba instalado y no se instaló de nuevo.
 
-El cubo y el suelo solo se activan con ?physicsDebug. Siguen pendientes personaje físico, controles, raycasting, plataformas reales, vida, caídas, reaparición, cobijas, fogatas, HUD, estados y trigger del iglú.
+Al cierre de Fase 1, ?physicsDebug activaba el cubo y suelo de prueba y el resto de mecánicas seguía pendiente. La sección 13 registra el avance posterior; en Fase 2 ese parámetro muestra la esfera del personaje y su raycast.
 
 Pruebas: ejecutar `node --test tests/physics-world.test.js` desde la raíz del proyecto.
+
+## 13. Entrega de Fase 2 — El protagonista confiable
+
+**Fecha:** 13 de noviembre de 2026. **Estado:** implementada y verificada en copia de trabajo; todavía no aplicada al proyecto del Escritorio. Se conserva la versión de requisitos 0.3.
+
+### 13.1 Alcance y trazabilidad
+
+| Tarea del plan | Entrega | Requisito / criterio | Validación en copia |
+|---|---|---|---|
+| 2.1 | PlayerController.js: esfera dinámica, rotación física bloqueada, pivot del modelo sincronizado con el cuerpo. | RF-01, RT-04, CP-13 (personaje) | El GLB real conserva la transformación del pingüino y el resto de la escena permanece fijo. |
+| 2.2 | InputHandler.js: WASD/flechas, dirección diagonal normalizada, fuerzas de aceleración/frenado. | RF-01, CP-01 | Pruebas de velocidad y equivalencia a 30/60/120 FPS aprobadas; desplazamiento revisado en navegador. |
+| 2.3 | CollisionSystem.js: raycast vertical de menos de 0.6 unidades y salto con impulso solo desde suelo. | RF-01, CP-02, CP-03 | Salto aprobado en suelo; se rechazan pulsaciones en el aire y repetición por mantener espacio. |
+| Soporte de integración | Tres cuerpos estáticos triangulados a partir de las plataformas originales. | RF-03, RT-04 | Aterrizaje y soporte en plataforma de inicio del GLB real verificados. Falta revisar todo el recorrido. |
+
+Se usa el nodo Pinguino del archivo public/assets/modelos/chilli_willi.glb, que contiene la escena completa. Solo ese objeto pasa a un grupo móvil; sus materiales, geometría, escala y orientación se conservan. Se ajusta la cámara para enfocarlo y seguirlo sin editar los modelos.
+
+Se registran las plataformas plataforma_extra, Pltaforma_de_la_casita y paltaformas_de_hielito, con 1418 triángulos en total. Sus geometrías originales se copian a cuerpos Trimesh estáticos; no se introduce un plano infinito que cubra huecos. La casa y demás decoraciones no reciben colisiones en esta fase.
+
+### 13.2 Parámetros iniciales implementados
+
+| Parámetro | Valor inicial |
+|---|---|
+| Masa del personaje | 1 unidad |
+| Radio esférico | Media altura del modelo; aproximadamente 0.259908 unidades |
+| Longitud del raycast | Radio + 0.025; aproximadamente 0.284908 unidades, menor de 0.6 |
+| Superficie válida | Cuerpo registrado y normal vertical de al menos 0.6 |
+| Validación para saltar | Superficie cercana y velocidad vertical absoluta menor de 0.2 unidades/s |
+| Velocidad horizontal objetivo | 2.2 unidades/s |
+| Aceleración / frenado en suelo | 16 / 14 unidades/s² |
+| Aceleración / frenado en aire | 4 / 1 unidades/s² |
+| Velocidad de salto | 3.2 unidades/s, aplicada mediante impulso |
+| Contacto personaje/suelo | Fricción 0, restitución 0; frenado controlado mediante fuerzas |
+| Simulación | Gravedad -9.81; paso fijo 1/60 s, seis subpasos y límite temporal de recuperación de 0.1 s |
+
+Son valores iniciales ajustables y no reglas definitivas de dificultad. La esfera simplificada requiere revisión en bordes y pendientes.
+
+WASD/flechas usan los ejes X/Z del escenario, sin cambiar de dirección al orbitar la cámara. Espacio requiere una nueva pulsación después de aterrizar. Se limpian las teclas al perder foco o cambiar la visibilidad. Se respetan campos de texto y combinaciones Ctrl/Alt/Meta.
+
+R devuelve manualmente al inicio de prueba y limpia velocidades. Esta ayuda no implementa RF-02, RF-07 ni RF-09: no cuenta caídas, no consume vidas y no reemplaza la reaparición automática prevista.
+
+### 13.3 Evidencia y límites
+
+- Diez pruebas aprobadas en la copia de trabajo: tres de Fase 1 y siete de Fase 2, incluida integración con el GLB real.
+- Compilación aprobada con Vite 8.3.5; advertencia de paquete JavaScript de aproximadamente 736.75 kB.
+- Navegador: carga, movimiento con flechas, salto y reinicio revisados sin errores ni advertencias de consola.
+- Los 16 recursos visuales y archivos de dependencias coinciden por hash con el proyecto inspeccionado.
+- Falta copiar esta entrega al proyecto real y repetir allí las pruebas y la compilación.
+
+Pruebas completas: `node --test tests/physics-world.test.js tests/player-controller.test.js`.
+
+Permanecen pendientes las tres caídas y derrota, reaparición automática, nivel de vida, cobijas, fogatas, victoria en el iglú, estados y HUD. La validación del recorrido completo y de FPS en los dispositivos del equipo sigue pendiente. La apariencia del personaje no incorpora todavía marcha ni giro direccional.
 
