@@ -6,6 +6,8 @@ import { PhysicsWorld } from '../physics/PhysicsWorld.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
 import { InputHandler } from '../player/InputHandler.js';
 import { PlayerController } from '../player/PlayerController.js';
+import { GameState, PLAYING } from './GameState.js';
+import { GameView } from './GameView.js';
 
 export class Game {
   constructor({ physicsDebug = false } = {}) {
@@ -13,8 +15,8 @@ export class Game {
     this.previousTime = null;
     this.physicsDebug = physicsDebug;
 
-    // Estado temporal para detectar una sola vez cada caída.
-    this.fallDetected = false;
+    this.state = new GameState();
+    this.started = false;
 
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
@@ -36,6 +38,7 @@ export class Game {
     });
 
     this.resize();
+    this.renderer.domElement.tabIndex = -1;
     document.body.appendChild(this.renderer.domElement);
 
     this.scene.add(
@@ -62,9 +65,10 @@ export class Game {
 
     this.physics = new PhysicsWorld();
     this.collisions = new CollisionSystem(this.physics);
-    this.input = new InputHandler();
-
-    this.addControlHint();
+    this.input = new InputHandler(window, { allowReset: false });
+    this.input.setEnabled(false);
+    this.controls.enabled = false;
+    this.view = new GameView(() => this.startGame());
 
     this.loadModel();
 
@@ -92,6 +96,7 @@ export class Game {
         if (result.status === 'fulfilled') this.disposeObjects(result.value.scene);
         else if (!this.disposed) console.error('Error al cargar el escenario:', result.reason);
       }
+      if (!this.disposed) this.view.loadFailed();
       return;
     }
 
@@ -104,11 +109,13 @@ export class Game {
       const { path, start } = this.createIcePath(root, template);
       this.setupPlayer(root, start);
       this.scene.add(path);
+      this.view.ready();
     } catch (error) {
       this.collisions.dispose();
       root.removeFromParent();
       this.disposeObjects(root);
       this.disposeObjects(template);
+      this.view.loadFailed();
       console.error('No se pudo preparar el recorrido:', error);
     }
   }
@@ -126,8 +133,8 @@ export class Game {
     const { x, z } = originalIce.getCenter(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
     const top = originalIce.max.y;
-    // Los huecos del tramo recto son de unos 0.55 a lo largo del eje X.
-    const spacing = 1.45;
+    // Con esta separación se puede saltar desde el centro sin tomar carrera.
+    const spacing = 1.02;
     const bridgeX = (housePlatform.max.x + originalIce.min.x) / 2;
     const positions = [x + 4 * spacing, x + 3 * spacing, x + 2 * spacing, x + spacing, bridgeX];
     const path = new THREE.Group();
@@ -177,13 +184,7 @@ export class Game {
       radius,
     });
 
-    // Observador temporal de caídas.
-    this.collisions.onFall((position) => {
-      console.log(
-        '[FALL DETECTED]',
-        position,
-      );
-    });
+    this.collisions.onFall(() => this.handleFall());
 
     this.camera.position
       .copy(spawn)
@@ -199,30 +200,48 @@ export class Game {
     }
   }
 
-  // --------------------------------------------------
-  // INDICACIONES DE CONTROL
-  // --------------------------------------------------
+  startGame() {
+    if (this.disposed || !this.player || this.isPlaying()) return;
 
-  addControlHint() {
-    this.hint = document.createElement('div');
+    this.state.restart();
+    this.player.reset();
+    this.input.setEnabled(true);
+    this.controls.enabled = true;
+    this.previousTime = null;
+    this.started = true;
+    this.view.showPlaying(this.state.lives);
+    this.renderer.domElement.focus({ preventScroll: true });
+  }
 
-    this.hint.textContent =
-      'Mover: WASD / flechas · Saltar: espacio · Volver al inicio: R · Camara: mouse';
+  isPlaying() {
+    return this.started && this.state.status === PLAYING;
+  }
 
-    Object.assign(this.hint.style, {
-      position: 'fixed',
-      bottom: '12px',
-      left: '12px',
-      color: 'white',
-      background: '#101827cc',
-      padding: '8px 12px',
-      borderRadius: '6px',
-      font: '14px system-ui',
-      pointerEvents: 'none',
-      maxWidth: 'calc(100% - 48px)',
-    });
+  handleFall() {
+    if (!this.isPlaying() || !this.collisions.checkFall(this.player.body)) return;
+    if (!this.state.registerFall()) return;
 
-    document.body.appendChild(this.hint);
+    this.view.updateLives(this.state.lives);
+    this.input.clear();
+    if (this.state.status === PLAYING) {
+      this.player.reset();
+    } else {
+      this.finishGame();
+    }
+  }
+
+  // La zona de activación del iglú llamará este método al llegar a la meta.
+  reachGoal() {
+    if (!this.isPlaying() || !this.state.declareVictory()) return false;
+
+    this.finishGame();
+    return true;
+  }
+
+  finishGame() {
+    this.input.setEnabled(false);
+    this.controls.enabled = false;
+    this.view.showResult(this.state.status);
   }
 
   // --------------------------------------------------
@@ -274,25 +293,10 @@ export class Game {
 
     this.previousTime = time;
 
-    // Simulación física.
-    this.physics.step(delta);
-
-    // Detectar una caída una sola vez.
-    if (this.player) {
-      const isFalling =
-        this.collisions.checkFall(this.player.body);
-
-      if (isFalling && !this.fallDetected) {
-        this.fallDetected = true;
-
-        this.collisions.notifyFall(
-          this.player.body.position,
-        );
-      }
-
-      // Permitir detectar otra caída después de un reset.
-      if (!isFalling && this.fallDetected) {
-        this.fallDetected = false;
+    if (this.isPlaying()) {
+      this.physics.step(delta);
+      if (this.collisions.checkFall(this.player.body)) {
+        this.collisions.notifyFall(this.player.body.position);
       }
     }
 
@@ -413,7 +417,7 @@ export class Game {
     this.player?.dispose();
     this.collisions.dispose();
 
-    this.hint.remove();
+    this.view.dispose();
 
     this.physics.dispose();
 

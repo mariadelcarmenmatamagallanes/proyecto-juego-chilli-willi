@@ -1,3 +1,4 @@
+import './game/game-ui.css';
 import { Game } from './game/Game.js';
 
 const game = new Game({

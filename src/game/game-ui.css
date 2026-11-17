@@ -1,0 +1,81 @@
+.game-ui [hidden] {
+  display: none;
+}
+
+.game-ui {
+  color: #f7faff;
+  font: 15px/1.45 system-ui, sans-serif;
+}
+
+.game-ui__lives,
+.game-ui__hint {
+  position: fixed;
+  z-index: 1;
+  left: 1rem;
+  margin: 0;
+  border-radius: 0.6rem;
+  background: #101827eb;
+  padding: 0.55rem 0.85rem;
+  max-width: calc(100% - 4rem);
+  pointer-events: none;
+}
+
+.game-ui__lives {
+  top: 1rem;
+  border: 1px solid #8cc8e06b;
+  font-weight: 700;
+}
+
+.game-ui__hint {
+  bottom: 1rem;
+}
+
+.game-ui__overlay {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+  background: #101827e0;
+}
+
+.game-ui__card {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  width: min(38rem, 100%);
+}
+
+.game-ui__image {
+  display: block;
+  width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: 0.8rem;
+  background: #f5f5f5;
+  color: #101827;
+}
+
+.game-ui button {
+  border: 0;
+  border-radius: 0.65rem;
+  padding: 0.65rem 1.4rem;
+  background: #ffd169;
+  color: #141933;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.game-ui button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+.game-ui button:disabled {
+  background: #35455c;
+  color: #f7faff;
+  cursor: default;
+}

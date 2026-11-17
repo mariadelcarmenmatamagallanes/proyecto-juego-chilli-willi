@@ -4,16 +4,18 @@ const movementCodes = new Set([
 const controlCodes = new Set([...movementCodes, 'Space', 'KeyR']);
 
 export class InputHandler {
-  constructor(target = window) {
+  constructor(target = window, { allowReset = true } = {}) {
     this.target = target;
+    this.enabled = true;
     this.pressed = new Set();
     this.jumpRequested = false;
     this.resetRequested = false;
     this.onKeyDown = (event) => {
+      if (!this.enabled) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const tag = event.target?.tagName;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || event.target?.isContentEditable) return;
-      if (!controlCodes.has(event.code)) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(tag) || event.target?.isContentEditable) return;
+      if (!controlCodes.has(event.code) || (!allowReset && event.code === 'KeyR')) return;
       event.preventDefault();
       if (!event.repeat && !this.pressed.has(event.code)) {
         if (event.code === 'Space') this.jumpRequested = true;
@@ -23,7 +25,6 @@ export class InputHandler {
     };
     this.onKeyUp = (event) => {
       this.pressed.delete(event.code);
-      if (controlCodes.has(event.code)) event.preventDefault();
     };
     this.onBlur = () => this.clear();
     this.onVisibility = () => {
@@ -55,6 +56,11 @@ export class InputHandler {
     const requested = this.resetRequested;
     this.resetRequested = false;
     return requested;
+  }
+
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    if (!enabled) this.clear();
   }
 
   clear() {
