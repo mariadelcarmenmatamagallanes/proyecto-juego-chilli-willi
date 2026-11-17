@@ -7,7 +7,7 @@
   font: 15px/1.45 system-ui, sans-serif;
 }
 
-.game-ui__lives,
+.game-ui__stats,
 .game-ui__hint {
   position: fixed;
   z-index: 1;
@@ -20,10 +20,14 @@
   pointer-events: none;
 }
 
-.game-ui__lives {
+.game-ui__stats {
   top: 1rem;
   border: 1px solid #8cc8e06b;
   font-weight: 700;
+}
+
+.game-ui__stats p {
+  margin: 0;
 }
 
 .game-ui__hint {

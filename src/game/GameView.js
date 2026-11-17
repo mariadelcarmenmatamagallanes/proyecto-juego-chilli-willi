@@ -1,4 +1,4 @@
-import { VICTORY } from './GameState.js';
+import { MAX_HEALTH, VICTORY } from './GameState.js';
 
 const illustrations = {
   start: ['chilliwilly.jpeg', 'Chilli Willy'],
@@ -11,10 +11,13 @@ export class GameView {
     this.root = document.createElement('div');
     this.root.className = 'game-ui';
 
+    this.stats = document.createElement('div');
+    this.stats.className = 'game-ui__stats';
+    this.stats.setAttribute('role', 'status');
+    this.stats.hidden = true;
     this.lives = document.createElement('p');
-    this.lives.className = 'game-ui__lives';
-    this.lives.setAttribute('role', 'status');
-    this.lives.hidden = true;
+    this.health = document.createElement('p');
+    this.stats.append(this.lives, this.health);
 
     this.hint = document.createElement('p');
     this.hint.className = 'game-ui__hint';
@@ -39,7 +42,7 @@ export class GameView {
     this.onPlay = onPlay;
     card.append(this.image, this.button);
     this.screen.append(card);
-    this.root.append(this.lives, this.hint, this.screen);
+    this.root.append(this.stats, this.hint, this.screen);
     document.body.append(this.root);
     this.showScreen('start', 'Cargando…', true);
   }
@@ -63,15 +66,16 @@ export class GameView {
     this.showScreen('start', 'No se pudo cargar el escenario', true);
   }
 
-  showPlaying(lives) {
+  showPlaying(state) {
     this.screen.hidden = true;
     this.hint.hidden = false;
-    this.updateLives(lives);
+    this.updateStats(state);
   }
 
-  updateLives(lives) {
-    this.lives.hidden = false;
+  updateStats({ lives, health }) {
     this.lives.textContent = 'Oportunidades: ' + lives;
+    this.health.textContent = 'Vida: ' + health + ' / ' + MAX_HEALTH;
+    this.stats.hidden = false;
   }
 
   showResult(status) {

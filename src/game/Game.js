@@ -6,10 +6,12 @@ import { PhysicsWorld } from '../physics/PhysicsWorld.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
 import { InputHandler } from '../player/InputHandler.js';
 import { PlayerController } from '../player/PlayerController.js';
+import { BLANKET, CAMPFIRE, Collectibles } from '../objects/Collectibles.js';
 import { GameState, PLAYING } from './GameState.js';
 import { GameView } from './GameView.js';
 
 const GOAL_RADIUS = 0.55;
+const IGLOO_PLATFORM = 'Pltaforma_de_la_casita';
 
 export class Game {
   constructor({ physicsDebug = false } = {}) {
@@ -113,6 +115,7 @@ export class Game {
       this.goalPosition = igloo.getWorldPosition(new THREE.Vector3());
 
       const { path, start } = this.createIcePath(root, template);
+      this.setupCollectibles(root, path);
       this.setupPlayer(root, start);
       this.scene.add(path);
       this.view.ready();
@@ -134,7 +137,7 @@ export class Game {
       root.getObjectByName('paltaformas_de_hielito'), true,
     );
     const housePlatform = new THREE.Box3().setFromObject(
-      root.getObjectByName('Pltaforma_de_la_casita'), true,
+      root.getObjectByName(IGLOO_PLATFORM), true,
     );
     const { x, z } = originalIce.getCenter(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
@@ -165,6 +168,45 @@ export class Game {
     );
     if (height === null) throw new Error('La plataforma inicial no tiene suelo en el punto de inicio.');
     return { path, start: new THREE.Vector3(startX, height, z) };
+  }
+
+  setupCollectibles(root, path) {
+    this.blanket = root.getObjectByName('Cobija');
+    const campfire = root.getObjectByName('Fogata_prendida');
+    if (!this.blanket || !campfire) {
+      throw new Error('El escenario debe contener la cobija y la fogata encendida.');
+    }
+
+    const blanketPlatform = path.getObjectByName('HieloCamino3');
+    const housePlatform = root.getObjectByName(IGLOO_PLATFORM);
+    const blanketCenter = new THREE.Box3().setFromObject(blanketPlatform, true)
+      .getCenter(new THREE.Vector3());
+    const blanketPosition = this.placeOnPlatform(
+      this.blanket, blanketPlatform, blanketCenter.x, blanketCenter.z,
+    );
+    // Colocar la fogata al costado del acceso, fuera del área de victoria.
+    const campfirePosition = this.placeOnPlatform(
+      campfire, housePlatform, this.goalPosition.x + 1.3, this.goalPosition.z + 0.2,
+    );
+
+    this.collectibles = new Collectibles([
+      { id: 'blanket', ...BLANKET, position: blanketPosition },
+      { id: 'campfire', ...CAMPFIRE, position: campfirePosition },
+    ]);
+  }
+
+  placeOnPlatform(object, platform, x, z) {
+    const bounds = new THREE.Box3().setFromObject(platform, true);
+    const surface = [...this.collisions.surfaces].find(body => body.userData.platform === platform.name);
+    const y = this.collisions.getSurfaceHeight(surface, x, z, bounds.min.y, bounds.max.y);
+    if (y === null) throw new Error('El objeto no tiene suelo debajo: ' + object.name);
+
+    const objectBounds = new THREE.Box3().setFromObject(object, true);
+    const center = objectBounds.getCenter(new THREE.Vector3());
+    const offset = new THREE.Vector3(x - center.x, y - objectBounds.min.y, z - center.z);
+    const worldOrigin = object.getWorldPosition(new THREE.Vector3()).add(offset);
+    object.position.copy(object.parent.worldToLocal(worldOrigin));
+    return center.add(offset);
   }
 
   setupPlayer(root, start) {
@@ -213,12 +255,14 @@ export class Game {
     if (this.disposed || !this.player || this.isPlaying()) return;
 
     this.state.restart();
+    this.collectibles.reset();
+    this.blanket.visible = true;
     this.player.reset();
     this.input.setEnabled(true);
     this.controls.enabled = true;
     this.previousTime = null;
     this.started = true;
-    this.view.showPlaying(this.state.lives);
+    this.view.showPlaying(this.state);
     this.renderer.domElement.focus({ preventScroll: true });
   }
 
@@ -230,7 +274,7 @@ export class Game {
     if (!this.isPlaying() || !this.collisions.checkFall(this.player.body)) return;
     if (!this.state.registerFall()) return;
 
-    this.view.updateLives(this.state.lives);
+    this.view.updateStats(this.state);
     this.input.clear();
     if (this.state.status === PLAYING) {
       this.player.reset();
@@ -239,11 +283,19 @@ export class Game {
     }
   }
 
+  updateCollectibles(delta) {
+    const seconds = Math.min(Math.max(delta, 0), 0.1);
+    if (this.collectibles.update(this.player.body.position, seconds, this.state)) {
+      this.blanket.visible = !this.collectibles.isConsumed('blanket');
+      this.view.updateStats(this.state);
+    }
+  }
+
   isAtGoal() {
     const { body, radius } = this.player;
     if (this.goalPosition.distanceToSquared(body.position) > GOAL_RADIUS ** 2) return false;
     const ground = this.collisions.getGround(body, radius);
-    return ground?.body.userData.platform === 'Pltaforma_de_la_casita';
+    return ground?.body.userData.platform === IGLOO_PLATFORM;
   }
 
   reachGoal() {
@@ -312,8 +364,9 @@ export class Game {
       this.physics.step(delta);
       if (this.collisions.checkFall(this.player.body)) {
         this.collisions.notifyFall(this.player.body.position);
-      } else if (this.isAtGoal()) {
-        this.reachGoal();
+      } else {
+        this.updateCollectibles(delta);
+        if (this.isAtGoal()) this.reachGoal();
       }
     }
 
