@@ -18,7 +18,7 @@ export class GameView {
 
     this.hint = document.createElement('p');
     this.hint.className = 'game-ui__hint';
-    this.hint.textContent = 'Hacia la casa: A / ← · Saltar: espacio · Mover: WASD / flechas · Cámara: mouse';
+    this.hint.textContent = 'Llega a la entrada del iglú · Mover: WASD / flechas · Saltar: Espacio';
     this.hint.hidden = true;
 
     this.screen = document.createElement('div');

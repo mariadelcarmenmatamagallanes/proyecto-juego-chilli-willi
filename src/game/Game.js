@@ -9,6 +9,8 @@ import { PlayerController } from '../player/PlayerController.js';
 import { GameState, PLAYING } from './GameState.js';
 import { GameView } from './GameView.js';
 
+const GOAL_RADIUS = 0.55;
+
 export class Game {
   constructor({ physicsDebug = false } = {}) {
     this.disposed = false;
@@ -106,6 +108,10 @@ export class Game {
 
     try {
       this.collisions.addPlatformsFromScene(root);
+      const igloo = root.getObjectByName('Casa');
+      if (!igloo) throw new Error('El GLB no contiene la entrada del iglú.');
+      this.goalPosition = igloo.getWorldPosition(new THREE.Vector3());
+
       const { path, start } = this.createIcePath(root, template);
       this.setupPlayer(root, start);
       this.scene.add(path);
@@ -133,8 +139,8 @@ export class Game {
     const { x, z } = originalIce.getCenter(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
     const top = originalIce.max.y;
-    // Con esta separación se puede saltar desde el centro sin tomar carrera.
-    const spacing = 1.02;
+    // Dejar huecos que requieran saltar entre plataformas.
+    const spacing = 1.45;
     const bridgeX = (housePlatform.max.x + originalIce.min.x) / 2;
     const positions = [x + 4 * spacing, x + 3 * spacing, x + 2 * spacing, x + spacing, bridgeX];
     const path = new THREE.Group();
@@ -143,7 +149,10 @@ export class Game {
     const surfaces = positions.map((platformX, index) => {
       const platform = new THREE.Group();
       platform.name = index === 0 ? 'HieloInicio' : `HieloCamino${index}`;
-      platform.position.set(platformX - center.x, top - bounds.max.y, z - center.z);
+      // La pieza junto al iglú es más estrecha para mantener un hueco a cada lado.
+      const widthScale = platformX === bridgeX ? 0.5 : 1;
+      platform.scale.x = widthScale;
+      platform.position.set(platformX - center.x * widthScale, top - bounds.max.y, z - center.z);
       platform.add(template.clone());
       path.add(platform);
       return this.collisions.createPlatformBody(platform);
@@ -230,7 +239,13 @@ export class Game {
     }
   }
 
-  // La zona de activación del iglú llamará este método al llegar a la meta.
+  isAtGoal() {
+    const { body, radius } = this.player;
+    if (this.goalPosition.distanceToSquared(body.position) > GOAL_RADIUS ** 2) return false;
+    const ground = this.collisions.getGround(body, radius);
+    return ground?.body.userData.platform === 'Pltaforma_de_la_casita';
+  }
+
   reachGoal() {
     if (!this.isPlaying() || !this.state.declareVictory()) return false;
 
@@ -297,6 +312,8 @@ export class Game {
       this.physics.step(delta);
       if (this.collisions.checkFall(this.player.body)) {
         this.collisions.notifyFall(this.player.body.position);
+      } else if (this.isAtGoal()) {
+        this.reachGoal();
       }
     }
 
