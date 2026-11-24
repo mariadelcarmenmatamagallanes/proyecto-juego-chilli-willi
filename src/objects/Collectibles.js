@@ -1,3 +1,4 @@
+export const MATCHBOX = Object.freeze({ radius: 0.46, recovery: 20 });
 export const BLANKET = Object.freeze({ radius: 0.46, recovery: 30 });
 export const CAMPFIRE = Object.freeze({ radius: 0.62, recovery: 25, cooldown: 8 });
 

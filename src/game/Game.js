@@ -6,7 +6,7 @@ import { PhysicsWorld } from '../physics/PhysicsWorld.js';
 import { CollisionSystem } from '../physics/CollisionSystem.js';
 import { InputHandler } from '../player/InputHandler.js';
 import { PlayerController } from '../player/PlayerController.js';
-import { BLANKET, CAMPFIRE, Collectibles } from '../objects/Collectibles.js';
+import { BLANKET, MATCHBOX, CAMPFIRE, Collectibles } from '../objects/Collectibles.js';
 import { GameState, PLAYING } from './GameState.js';
 import { GameView } from './GameView.js';
 
@@ -26,7 +26,35 @@ export class Game {
     document.body.style.overflow = 'hidden';
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#101827');
+    this.scene.background = new THREE.Color('#78AEF9');
+
+    this.backgroundTexture = null;
+
+    new THREE.TextureLoader().load(
+      '/assets/imagenes/Fondo.jpeg',
+      (texture) => {
+        if (this.disposed) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = THREE.SRGBColorSpace;
+        this.backgroundTexture = texture;
+        this.scene.background = texture;
+        this.resizeBackground();
+      },
+      undefined,
+      (error) => console.warn('Error al cargar el fondo:', error)
+    );
+
+    this.ambientAudio = new Audio('/assets/sonidos/viento.mp3');
+    this.ambientAudio.loop = true;
+    this.ambientAudio.volume = 0.25;
+    this.fallSound = new Audio('/assets/sonidos/caida.mp3');
+    this.fallSound.volume = 0.6;
+    this.fallSound.preload = 'auto';
+    this.fallSound.load();
+
+    this.ambientAudio.preload = 'auto';
 
     this.camera = new THREE.PerspectiveCamera(
       75,
@@ -63,6 +91,9 @@ export class Game {
     );
 
     this.controls.enableDamping = true;
+    this.controls.enableRotate = false;
+    this.controls.enableZoom = false;
+    this.controls.enablePan = false;
     this.controls.dampingFactor = 0.05;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
@@ -115,9 +146,10 @@ export class Game {
       this.goalPosition = igloo.getWorldPosition(new THREE.Vector3());
 
       const { path, start } = this.createIcePath(root, template);
-      this.setupCollectibles(root, path);
+      await this.setupCollectibles(root, path);
       this.setupPlayer(root, start);
       this.scene.add(path);
+      this.createWaterSurface(path);
       this.view.ready();
     } catch (error) {
       this.collisions.dispose();
@@ -127,6 +159,77 @@ export class Game {
       this.view.loadFailed();
       console.error('No se pudo preparar el recorrido:', error);
     }
+  }
+
+  createWaterSurface(path) {
+    const bounds = new THREE.Box3().setFromObject(path, true);
+    const center = bounds.getCenter(new THREE.Vector3());
+
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x78AEF9,
+      side: THREE.DoubleSide
+    });
+
+    this.water = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      material
+    );
+
+    this.water.name = 'AguaHelada';
+    this.water.rotation.x = -Math.PI / 2;
+    this.water.position.set(
+      center.x,
+      bounds.min.y - 0.15,
+      center.z
+    );
+
+    this.scene.add(this.water);
+
+    new THREE.TextureLoader().load(
+      '/assets/imagenes/Fondo.jpeg',
+      (texture) => {
+        if (this.disposed) {
+          texture.dispose();
+          return;
+        }
+
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.MirroredRepeatWrapping;
+        texture.wrapT = THREE.MirroredRepeatWrapping;
+        const image = texture.image;
+        const canvas = document.createElement('canvas');
+        const cut = Math.round(image.height * 484 / 838);
+
+        canvas.width = image.width;
+        canvas.height = image.height - cut;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(
+          image,
+          0, cut, image.width, canvas.height,
+          0, 0, canvas.width, canvas.height
+        );
+
+        ctx.fillStyle = 'rgba(120, 174, 249, 0.22)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        texture.image = canvas;
+        texture.repeat.set(20, 20);
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.generateMipmaps = true;
+        texture.offset.set(0, 0);
+        texture.anisotropy =
+          this.renderer.capabilities.getMaxAnisotropy();
+        texture.needsUpdate = true;
+
+        material.color.set(0xffffff);
+        material.map = texture;
+        material.needsUpdate = true;
+      },
+      undefined,
+      (error) => console.warn('Error al cargar agua:', error)
+    );
   }
 
   createIcePath(root, template) {
@@ -145,7 +248,12 @@ export class Game {
     // Dejar huecos que requieran saltar entre plataformas.
     const spacing = 1.45;
     const bridgeX = (housePlatform.max.x + originalIce.min.x) / 2;
-    const positions = [x + 4 * spacing, x + 3 * spacing, x + 2 * spacing, x + spacing, bridgeX];
+    const positions = [
+      ...Array.from({ length: 9 }, (_, i) =>
+        x + (9 - i) * spacing
+      ),
+      bridgeX
+    ];
     const path = new THREE.Group();
     path.name = 'CaminoDeHielo';
 
@@ -170,29 +278,82 @@ export class Game {
     return { path, start: new THREE.Vector3(startX, height, z) };
   }
 
-  setupCollectibles(root, path) {
-    this.blanket = root.getObjectByName('Cobija');
-    const campfire = root.getObjectByName('Fogata_prendida');
-    if (!this.blanket || !campfire) {
-      throw new Error('El escenario debe contener la cobija y la fogata encendida.');
+  async setupCollectibles(root, path) {
+    const loader = new GLTFLoader();
+
+    const [blanketModel, matchboxModel] = await Promise.all([
+      loader.loadAsync('/assets/modelos/Manta.glb'),
+      loader.loadAsync('/assets/modelos/Caja_Cerillo.glb')
+    ]);
+
+    if (this.disposed) {
+      this.disposeObjects(blanketModel.scene);
+      this.disposeObjects(matchboxModel.scene);
+      throw new Error('Juego cerrado durante la carga.');
     }
 
-    const blanketPlatform = path.getObjectByName('HieloCamino3');
+    const originalBlanket = root.getObjectByName('Cobija');
+    if (originalBlanket) originalBlanket.visible = false;
+
+    const campfire = root.getObjectByName('Fogata_prendida');
+    if (!campfire) throw new Error('No se encontro la fogata.');
+
+    this.rewardVisuals = new Map();
+    const items = [];
+
+    const rewards = [
+      { id: 'blanket1', platform: 2, model: blanketModel.scene, rule: BLANKET },
+      { id: 'matchbox1', platform: 4, model: matchboxModel.scene, rule: MATCHBOX },
+      { id: 'blanket2', platform: 6, model: blanketModel.scene, rule: BLANKET },
+      { id: 'matchbox2', platform: 8, model: matchboxModel.scene, rule: MATCHBOX }
+    ];
+
+    for (const reward of rewards) {
+      const platform = path.getObjectByName('HieloCamino' + reward.platform);
+      if (!platform) throw new Error('Falta plataforma de recompensa.');
+
+      const object = reward.model.clone(true);
+      const bounds = new THREE.Box3().setFromObject(object, true);
+      const size = bounds.getSize(new THREE.Vector3());
+      const largest = Math.max(size.x, size.y, size.z);
+
+      if (largest <= 0) throw new Error('Modelo de recompensa vacio.');
+
+      object.scale.multiplyScalar(0.38 / largest);
+      object.name = reward.id;
+      this.scene.add(object);
+
+      const center = new THREE.Box3().setFromObject(platform, true)
+        .getCenter(new THREE.Vector3());
+
+      const position = this.placeOnPlatform(
+        object, platform, center.x, center.z
+      );
+
+      this.rewardVisuals.set(reward.id, object);
+
+      items.push({
+        id: reward.id,
+        ...reward.rule,
+        position
+      });
+    }
+
     const housePlatform = root.getObjectByName(IGLOO_PLATFORM);
-    const blanketCenter = new THREE.Box3().setFromObject(blanketPlatform, true)
-      .getCenter(new THREE.Vector3());
-    const blanketPosition = this.placeOnPlatform(
-      this.blanket, blanketPlatform, blanketCenter.x, blanketCenter.z,
-    );
-    // Colocar la fogata al costado del acceso, fuera del área de victoria.
+
     const campfirePosition = this.placeOnPlatform(
-      campfire, housePlatform, this.goalPosition.x + 1.3, this.goalPosition.z + 0.2,
+      campfire, housePlatform,
+      this.goalPosition.x + 1.3,
+      this.goalPosition.z + 0.2
     );
 
-    this.collectibles = new Collectibles([
-      { id: 'blanket', ...BLANKET, position: blanketPosition },
-      { id: 'campfire', ...CAMPFIRE, position: campfirePosition },
-    ]);
+    items.push({
+      id: 'campfire',
+      ...CAMPFIRE,
+      position: campfirePosition
+    });
+
+    this.collectibles = new Collectibles(items);
   }
 
   placeOnPlatform(object, platform, x, z) {
@@ -239,7 +400,7 @@ export class Game {
 
     this.camera.position
       .copy(spawn)
-      .add(new THREE.Vector3(2.8, 2, 2.1));
+      .add(new THREE.Vector3(3.8, 1.8, 0));
 
     this.controls.target.copy(spawn);
     this.controls.update();
@@ -254,15 +415,23 @@ export class Game {
   startGame() {
     if (this.disposed || !this.player || this.isPlaying()) return;
 
+    if (this.resultSound) {
+      this.resultSound.pause();
+      this.resultSound.currentTime = 0;
+    }
+
     this.state.restart();
     this.collectibles.reset();
-    this.blanket.visible = true;
+    for (const object of this.rewardVisuals.values()) object.visible = true;
     this.player.reset();
     this.input.setEnabled(true);
     this.controls.enabled = true;
     this.previousTime = null;
     this.started = true;
     this.view.showPlaying(this.state);
+    this.ambientAudio.play().catch((error) => {
+      console.warn('No se pudo reproducir el audio:', error);
+    });
     this.renderer.domElement.focus({ preventScroll: true });
   }
 
@@ -273,6 +442,11 @@ export class Game {
   handleFall() {
     if (!this.isPlaying() || !this.collisions.checkFall(this.player.body)) return;
     if (!this.state.registerFall()) return;
+
+    this.fallSound.currentTime = 0;
+    this.fallSound.play().catch(error => {
+      console.warn('Error al reproducir caida:', error);
+    });
 
     this.view.updateStats(this.state);
     this.input.clear();
@@ -286,7 +460,19 @@ export class Game {
   updateCollectibles(delta) {
     const seconds = Math.min(Math.max(delta, 0), 0.1);
     if (this.collectibles.update(this.player.body.position, seconds, this.state)) {
-      this.blanket.visible = !this.collectibles.isConsumed('blanket');
+      if (!this.bonusSound) {
+        this.bonusSound = new Audio('/assets/sonidos/bonus.wav');
+        this.bonusSound.volume = 0.5;
+      }
+
+      this.bonusSound.currentTime = 0;
+      this.bonusSound.play().catch(error => {
+        console.warn('Error al reproducir bonus:', error);
+      });
+
+      for (const [id, object] of this.rewardVisuals) {
+        object.visible = !this.collectibles.isConsumed(id);
+      }
       this.view.updateStats(this.state);
     }
   }
@@ -306,9 +492,29 @@ export class Game {
   }
 
   finishGame() {
+    this.ambientAudio.pause();
+    this.ambientAudio.currentTime = 0;
     this.input.setEnabled(false);
     this.controls.enabled = false;
     this.view.showResult(this.state.status);
+
+    if (this.resultSound) {
+      this.resultSound.pause();
+      this.resultSound.removeAttribute('src');
+      this.resultSound.load();
+    }
+
+    const resultFile = this.state.status === 'VICTORY'
+      ? 'victoria.mp3'
+      : 'derrota.mp3';
+
+    this.resultSound = new Audio('/assets/sonidos/' + resultFile);
+    this.resultSound.volume = 0.7;
+    this.resultSound.loop = false;
+
+    this.resultSound.play().catch(error => {
+      console.warn('Error al reproducir resultado:', error);
+    });
   }
 
   // --------------------------------------------------
@@ -427,7 +633,23 @@ export class Game {
   // AJUSTE DE VENTANA
   // --------------------------------------------------
 
+  resizeBackground() {
+    const texture = this.backgroundTexture;
+    if (!texture || !texture.image) return;
+
+    const screenAspect = window.innerWidth / window.innerHeight;
+    const imageAspect = texture.image.width / texture.image.height;
+
+    const x = Math.min(screenAspect / imageAspect, 1);
+    const y = Math.min(imageAspect / screenAspect, 1);
+
+    texture.repeat.set(x, y);
+    texture.offset.set((1 - x) / 2, (1 - y) / 2);
+    texture.updateMatrix();
+  }
+
   resize() {
+    this.resizeBackground();
     this.camera.aspect =
       window.innerWidth / window.innerHeight;
 
@@ -470,9 +692,35 @@ export class Game {
   }
 
   dispose() {
+    if (this.fallSound) {
+      this.fallSound.pause();
+      this.fallSound.removeAttribute('src');
+      this.fallSound.load();
+      this.fallSound = null;
+    }
+    if (this.resultSound) {
+      this.resultSound.pause();
+      this.resultSound.removeAttribute('src');
+      this.resultSound.load();
+      this.resultSound = null;
+    }
+    if (this.bonusSound) {
+      this.bonusSound.pause();
+      this.bonusSound.removeAttribute('src');
+      this.bonusSound.load();
+      this.bonusSound = null;
+    }
     if (this.disposed) return;
 
     this.disposed = true;
+
+    this.ambientAudio.pause();
+    this.ambientAudio.removeAttribute('src');
+    this.ambientAudio.load();
+
+    this.backgroundTexture?.dispose();
+    this.backgroundTexture = null;
+    this.scene.background = null;
 
     this.renderer.setAnimationLoop(null);
 

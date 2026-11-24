@@ -27,6 +27,9 @@ export class PlayerController {
     physics.world.addBody(this.body);
     this.grounded = false;
     this.jumpCount = 0;
+    this.jumpSound = new Audio('/assets/sonidos/salto.mp3');
+    this.jumpSound.volume = 0.5;
+    this.jumpSound.preload = 'auto';
     this.force = new CANNON.Vec3();
     this.onPreStep = () => this.fixedUpdate();
     physics.world.addEventListener('preStep', this.onPreStep);
@@ -47,6 +50,8 @@ export class PlayerController {
       ));
       this.grounded = false;
       this.jumpCount++;
+      this.jumpSound.currentTime = 0;
+      this.jumpSound.play().catch(() => {});
     }
 
     const direction = this.input.getMovement();
@@ -86,6 +91,9 @@ export class PlayerController {
   }
 
   dispose() {
+    this.jumpSound.pause();
+    this.jumpSound.removeAttribute('src');
+    this.jumpSound.load();
     this.physics.world.removeEventListener('preStep', this.onPreStep);
     this.physics.world.removeBody(this.body);
     this.physics.world.removeContactMaterial(this.contactMaterial);

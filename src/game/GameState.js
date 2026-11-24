@@ -18,9 +18,17 @@ export class GameState {
   registerFall() {
     if (this.#status !== PLAYING) return false;
 
-    this.#lives--;
     this.#health = Math.max(0, this.#health - FALL_DAMAGE);
-    if (this.#lives === 0) this.#status = GAME_OVER;
+
+    if (this.#health === 0) {
+      this.#lives--;
+
+      if (this.#lives === 0) {
+        this.#status = GAME_OVER;
+      } else {
+        this.#health = MAX_HEALTH;
+      }
+    }
     return true;
   }
 
